@@ -14,6 +14,13 @@ from jobs import JobFile, registry
 DOWNLOAD_DIR = Path(os.environ.get("DOWNLOAD_DIR", "./downloads")).resolve()
 DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
+MAX_DURATION_SECONDS = int(os.environ.get("MAX_DURATION_SECONDS", "1200"))
+MAX_PLAYLIST_ITEMS = int(os.environ.get("MAX_PLAYLIST_ITEMS", "20"))
+
+
+class ConversionRejected(ValueError):
+    """Raised when a request violates configured limits."""
+
 
 def _build_ydl_opts(job_id: str, quality: str, playlist: bool) -> dict:
     output_template = str(DOWNLOAD_DIR / job_id / "%(playlist_index)s-%(title)s.%(ext)s")
@@ -37,6 +44,7 @@ def _build_ydl_opts(job_id: str, quality: str, playlist: bool) -> dict:
         "format": "bestaudio/best",
         "outtmpl": output_template,
         "noplaylist": not playlist,
+        "playlistend": MAX_PLAYLIST_ITEMS,
         "quiet": True,
         "no_warnings": True,
         "writethumbnail": True,
@@ -49,6 +57,36 @@ def _build_ydl_opts(job_id: str, quality: str, playlist: bool) -> dict:
             },
         ],
     }
+
+
+def _probe_and_validate(url: str, playlist: bool) -> None:
+    """Cheap metadata probe that rejects requests violating limits
+    before we spend bandwidth/CPU on the real download."""
+    probe_opts: dict = {
+        "quiet": True,
+        "no_warnings": True,
+        "skip_download": True,
+        "noplaylist": not playlist,
+    }
+    if playlist:
+        probe_opts["extract_flat"] = "in_playlist"
+
+    with yt_dlp.YoutubeDL(probe_opts) as probe:
+        info = probe.extract_info(url, download=False)
+
+    if playlist:
+        entries = info.get("entries") or []
+        if len(entries) > MAX_PLAYLIST_ITEMS:
+            raise ConversionRejected(
+                f"La playlist tiene {len(entries)} videos; el máximo permitido es {MAX_PLAYLIST_ITEMS}."
+            )
+    else:
+        duration = info.get("duration") or 0
+        if duration and duration > MAX_DURATION_SECONDS:
+            minutes = MAX_DURATION_SECONDS // 60
+            raise ConversionRejected(
+                f"El video dura {int(duration)} s; el máximo es {minutes} minutos."
+            )
 
 
 def _embed_tags(mp3_path: Path, info: dict) -> None:
@@ -85,6 +123,8 @@ def _embed_tags(mp3_path: Path, info: dict) -> None:
 def run_conversion(job_id: str, url: str, quality: str, playlist: bool) -> None:
     """Blocking; meant to be run in a background task/thread."""
     try:
+        _probe_and_validate(url, playlist)
+
         opts = _build_ydl_opts(job_id, quality, playlist)
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=True)

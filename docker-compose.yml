@@ -8,6 +8,8 @@ services:
       - DB_PATH=/data/jobs.db
       - JOB_RETENTION_SECONDS=${JOB_RETENTION_SECONDS:-86400}
       - CLEANUP_INTERVAL_SECONDS=${CLEANUP_INTERVAL_SECONDS:-3600}
+      - MAX_DURATION_SECONDS=${MAX_DURATION_SECONDS:-1200}
+      - MAX_PLAYLIST_ITEMS=${MAX_PLAYLIST_ITEMS:-20}
     volumes:
       - backend_data:/data
     expose:

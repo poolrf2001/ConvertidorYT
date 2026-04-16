@@ -108,11 +108,23 @@ El contenedor `certbot` ejecuta `certbot renew` cada 12 horas de forma silencios
 
 ## 8. Actualizar la app
 
+Manual:
+
 ```bash
 cd /opt/convertidoryt
 git pull
 docker compose up -d --build
 ```
+
+Automático via GitHub Actions: configura los siguientes secrets del repo (`Settings → Secrets and variables → Actions`):
+
+| Secret | Valor |
+|--------|-------|
+| `DROPLET_HOST` | IP o dominio del droplet |
+| `DROPLET_USER` | usuario SSH (normalmente `root`) |
+| `DROPLET_SSH_KEY` | clave privada con acceso al droplet |
+
+Cada push a `main` dispara `.github/workflows/deploy.yml` que entra por SSH, hace `git pull` y reconstruye los contenedores.
 
 ## 9. Ver logs
 
@@ -121,14 +133,58 @@ docker compose logs -f backend
 docker compose logs -f nginx
 ```
 
-## 10. Backups (recomendado)
+## 10. Backups automáticos
 
-Haz backup periódico del volumen `backend_data` (contiene `jobs.db`). Ejemplo:
+Hay un script listo en `scripts/backup.sh`. Configúralo en cron:
 
 ```bash
-docker run --rm -v convertidoryt_backend_data:/data -v $(pwd):/backup alpine \
-    tar czf /backup/backend-$(date +%F).tgz -C /data .
+# como root en el droplet
+crontab -e
+# añade:
+0 3 * * * /opt/convertidoryt/scripts/backup.sh /var/backups/convertidoryt 7 >> /var/log/convertidoryt-backup.log 2>&1
 ```
+
+Deja 7 días de retención y borra automáticamente los tarballs viejos.
+
+## 11. Monitorización
+
+**Uptime externo** (gratis):
+- Crea una cuenta en [UptimeRobot](https://uptimerobot.com/) o [Better Stack](https://betterstack.com/).
+- Monitor HTTPS cada 5 min sobre `https://tudominio.com/api/health`.
+- Alerta por email/Telegram si cae.
+
+**Alerta de disco** (dentro del droplet):
+
+```bash
+cat > /usr/local/bin/disk-alert.sh <<'SH'
+#!/bin/sh
+USED=$(df -P / | awk 'NR==2 {print $5}' | tr -d '%')
+if [ "$USED" -ge 85 ]; then
+    echo "Disco al ${USED}% en $(hostname)" | mail -s "Disk alert" tu-email@ejemplo.com
+fi
+SH
+chmod +x /usr/local/bin/disk-alert.sh
+# añade a crontab:
+# 0 * * * * /usr/local/bin/disk-alert.sh
+```
+
+## 12. Endurecer SSH con fail2ban
+
+```bash
+apt install -y fail2ban
+cat > /etc/fail2ban/jail.d/sshd.conf <<'CONF'
+[sshd]
+enabled = true
+port = ssh
+maxretry = 5
+bantime = 3600
+findtime = 600
+CONF
+systemctl enable --now fail2ban
+fail2ban-client status sshd
+```
+
+Opcional: deshabilita login por contraseña dejando solo clave SSH en `/etc/ssh/sshd_config` (`PasswordAuthentication no`).
 
 ---
 
