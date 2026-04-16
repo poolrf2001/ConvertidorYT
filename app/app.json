@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "ConvertidorYT",
+    "slug": "convertidoryt",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "platforms": ["ios", "android", "web"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.convertidoryt.app"
+    },
+    "android": {
+      "package": "com.convertidoryt.app",
+      "permissions": ["READ_MEDIA_AUDIO", "WRITE_EXTERNAL_STORAGE"]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": [
+      [
+        "expo-media-library",
+        {
+          "photosPermission": false,
+          "savePhotosPermission": false,
+          "isAccessMediaLocationEnabled": false
+        }
+      ]
+    ]
+  }
+}
