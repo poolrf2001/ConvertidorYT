@@ -1,10 +1,29 @@
 import { useEffect, useRef, useState } from "react";
-import { SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Platform, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 
 import { ConverterForm } from "./components/ConverterForm";
 import { JobProgress } from "./components/JobProgress";
 import { fetchJob, startJob, type Job, type Quality } from "./api/client";
+
+function setupPwa() {
+  if (Platform.OS !== "web" || typeof document === "undefined") return;
+  if (!document.querySelector('link[rel="manifest"]')) {
+    const link = document.createElement("link");
+    link.rel = "manifest";
+    link.href = "/manifest.webmanifest";
+    document.head.appendChild(link);
+  }
+  if (!document.querySelector('meta[name="theme-color"]')) {
+    const meta = document.createElement("meta");
+    meta.name = "theme-color";
+    meta.content = "#e11d48";
+    document.head.appendChild(meta);
+  }
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  }
+}
 
 export default function App() {
   const [job, setJob] = useState<Job | null>(null);
@@ -12,6 +31,7 @@ export default function App() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
+    setupPwa();
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };

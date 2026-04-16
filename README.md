@@ -74,10 +74,14 @@ npx expo start
 4. Descarga (web) o guarda en biblioteca (móvil).
 5. Abre el MP3 en VLC/iTunes y verifica los tags ID3.
 
+## Producción
+
+Para desplegar en un droplet de Digital Ocean (Docker + nginx + Let's Encrypt + PWA), sigue la guía en [DEPLOY.md](DEPLOY.md).
+
 ## Limitaciones conocidas
 
-- El registro de jobs vive en memoria (reiniciar borra el historial).
-- No hay autenticación ni cuotas.
+- Persistencia en SQLite local (suficiente para un solo droplet; si escalas a varias réplicas necesitarás Postgres y almacenamiento compartido).
+- No hay autenticación ni cuotas por usuario (sí hay rate limiting por IP).
 - Para playlists muy largas conviene una cola real (Celery/Redis).
 
 ## Licencia

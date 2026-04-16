@@ -1,0 +1,53 @@
+services:
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+      - DOWNLOAD_DIR=/data/downloads
+      - DB_PATH=/data/jobs.db
+      - JOB_RETENTION_SECONDS=${JOB_RETENTION_SECONDS:-86400}
+      - CLEANUP_INTERVAL_SECONDS=${CLEANUP_INTERVAL_SECONDS:-3600}
+    volumes:
+      - backend_data:/data
+    expose:
+      - "8000"
+
+  app:
+    build:
+      context: ./app
+      args:
+        # Bundled into the static JS; for same-origin proxy we use "/"
+        # so the SPA calls /api/... on the same host as the nginx proxy.
+        EXPO_PUBLIC_API_URL: ""
+    restart: unless-stopped
+    expose:
+      - "80"
+
+  nginx:
+    build: ./nginx
+    restart: unless-stopped
+    environment:
+      - SERVER_NAME=${SERVER_NAME}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - certbot_certs:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    depends_on:
+      - backend
+      - app
+
+  certbot:
+    image: certbot/certbot:latest
+    restart: unless-stopped
+    volumes:
+      - certbot_certs:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    entrypoint: /bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done'
+
+volumes:
+  backend_data:
+  certbot_certs:
+  certbot_www:
