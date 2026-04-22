@@ -21,6 +21,9 @@ web-build/
 # Backend runtime
 backend/downloads/
 
+# Local full-stack compose data
+.local-data/
+
 # OS
 .DS_Store
 Thumbs.db

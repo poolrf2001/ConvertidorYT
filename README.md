@@ -5,13 +5,14 @@ Convertidor de videos de YouTube a MP3 con interfaz web y app móvil nativa (iOS
 - Selección de calidad (128, 192 o 320 kbps).
 - Metadatos ID3: título, artista y carátula embebida.
 - Soporte de playlists completas.
+- PWA instalable en móvil (sin pasar por tiendas).
 
 ## Aviso legal
 
-Este proyecto es para **uso personal y educativo**. Descargar contenido de YouTube puede violar sus Términos de Servicio y la ley de derechos de autor de tu país. Úsalo solo con:
+Proyecto para **uso personal y educativo**. Descargar contenido de YouTube puede violar sus Términos de Servicio y la ley de derechos de autor. Úsalo solo con:
 - contenido de tu propiedad,
 - videos con licencia Creative Commons, o
-- contenido autorizado explícitamente por el titular de los derechos.
+- contenido autorizado por el titular de los derechos.
 
 El uso que hagas es tu responsabilidad.
 
@@ -19,8 +20,9 @@ El uso que hagas es tu responsabilidad.
 
 ```
 ConvertidorYT/
-├── backend/    # FastAPI + yt-dlp + ffmpeg + mutagen
-└── app/        # Expo (React Native) – Web + iOS + Android
+├── backend/    # FastAPI + yt-dlp + ffmpeg + mutagen (SQLite)
+├── app/        # Expo (React Native) – Web + iOS + Android
+└── nginx/      # reverse proxy (local HTTP, producción con TLS)
 ```
 
 ## Requisitos
@@ -31,10 +33,16 @@ ConvertidorYT/
   - macOS: `brew install ffmpeg`
   - Ubuntu/Debian: `sudo apt install ffmpeg`
   - Windows: descarga desde https://ffmpeg.org/download.html y añade la ruta al PATH
+- **Docker + Docker Compose** (para la opción B de arranque local)
 
-## Arranque del backend
+---
+
+## Opción A — Dev local sin Docker (recomendado para iterar rápido)
+
+Dos terminales:
 
 ```bash
+# Terminal 1 — backend
 cd backend
 python -m venv venv
 source venv/bin/activate          # Windows: venv\Scripts\activate
@@ -43,19 +51,36 @@ cp .env.example .env
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Comprueba: `curl http://localhost:8000/api/health` → `{"ok": true}`.
-
-## Arranque de la app (web + móvil)
-
 ```bash
+# Terminal 2 — app
 cd app
 npm install
-cp .env.example .env              # apunta al backend (localhost:8000 por defecto)
+cp .env.example .env              # EXPO_PUBLIC_API_URL=http://localhost:8000
 npx expo start
 ```
 
-- **Web**: abre `http://localhost:8081`.
-- **Android / iOS**: instala **Expo Go** en tu móvil y escanea el QR del terminal. El móvil debe estar en la misma red y `EXPO_PUBLIC_API_URL` debe apuntar a la IP LAN del PC (p. ej. `http://192.168.1.10:8000`).
+- Web: `http://localhost:8081`.
+- Móvil: instala **Expo Go**, escanea el QR. El móvil debe estar en la misma red LAN y `EXPO_PUBLIC_API_URL` debe apuntar a la IP del PC (p. ej. `http://192.168.1.10:8000`).
+
+## Opción B — Stack completo en local con Docker
+
+Levanta los 3 contenedores (backend + app + nginx reverse proxy) igual que en producción, pero sin dominio ni TLS:
+
+```bash
+docker compose -f docker-compose.local.yml up --build
+```
+
+- Web: `http://localhost:8080`.
+- Backend directo: `http://localhost:8000` (expuesto para hacer `curl`).
+- Datos persistentes: `./.local-data/` (ignorado por git).
+
+Para parar:
+
+```bash
+docker compose -f docker-compose.local.yml down
+```
+
+Úsalo para probar el build de producción antes de subirlo al droplet.
 
 ## Endpoints del backend
 
@@ -74,14 +99,24 @@ npx expo start
 4. Descarga (web) o guarda en biblioteca (móvil).
 5. Abre el MP3 en VLC/iTunes y verifica los tags ID3.
 
-## Producción
+## Despliegue en producción
 
-Para desplegar en un droplet de Digital Ocean (Docker + nginx + Let's Encrypt + PWA), sigue la guía en [DEPLOY.md](DEPLOY.md).
+Cuando estés listo para mover el stack a un droplet con dominio + TLS, sigue la guía completa en [DEPLOY.md](DEPLOY.md). El `docker-compose.yml` raíz corresponde al perfil de producción; `docker-compose.local.yml` es solo para desarrollo.
+
+## Límites por defecto
+
+Configurables en `backend/.env` (o via env vars en producción):
+
+| Variable | Default | Descripción |
+|----------|---------|-------------|
+| `MAX_DURATION_SECONDS` | 1200 (20 min) | Máxima duración por video |
+| `MAX_PLAYLIST_ITEMS` | 20 | Máximo de pistas en una playlist |
+| `JOB_RETENTION_SECONDS` | 86400 (24 h) | Cuánto guardar MP3s antes de borrarlos |
 
 ## Limitaciones conocidas
 
-- Persistencia en SQLite local (suficiente para un solo droplet; si escalas a varias réplicas necesitarás Postgres y almacenamiento compartido).
-- No hay autenticación ni cuotas por usuario (sí hay rate limiting por IP).
+- Persistencia en SQLite local (suficiente para un solo host).
+- Sin cuentas de usuario — hay rate limiting por IP.
 - Para playlists muy largas conviene una cola real (Celery/Redis).
 
 ## Licencia

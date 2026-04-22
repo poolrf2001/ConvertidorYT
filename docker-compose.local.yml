@@ -1,0 +1,49 @@
+# Local full-stack compose.
+# Arranque:
+#   docker compose -f docker-compose.local.yml up --build
+# Luego abre http://localhost:8080
+#
+# Sin dominio, sin TLS, sin certbot. El contenedor nginx detecta la
+# ausencia de certificados y usa su configuración HTTP-only automáticamente.
+
+services:
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      - ALLOWED_ORIGINS=http://localhost:8080
+      - DOWNLOAD_DIR=/data/downloads
+      - DB_PATH=/data/jobs.db
+      - JOB_RETENTION_SECONDS=${JOB_RETENTION_SECONDS:-86400}
+      - CLEANUP_INTERVAL_SECONDS=${CLEANUP_INTERVAL_SECONDS:-3600}
+      - MAX_DURATION_SECONDS=${MAX_DURATION_SECONDS:-1200}
+      - MAX_PLAYLIST_ITEMS=${MAX_PLAYLIST_ITEMS:-20}
+    volumes:
+      - ./.local-data/backend:/data
+    ports:
+      # Expuesto para hacer curl directo durante desarrollo.
+      - "8000:8000"
+
+  app:
+    build:
+      context: ./app
+      args:
+        # Vacío = la SPA llama a /api/... en el mismo origen (nginx proxy).
+        EXPO_PUBLIC_API_URL: ""
+    restart: unless-stopped
+    expose:
+      - "80"
+
+  nginx:
+    build: ./nginx
+    restart: unless-stopped
+    environment:
+      - SERVER_NAME=localhost
+    ports:
+      - "8080:80"
+    volumes:
+      - ./.local-data/certbot-www:/var/www/certbot
+      # NO montamos letsencrypt -> entrypoint arranca en HTTP-only.
+    depends_on:
+      - backend
+      - app
