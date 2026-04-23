@@ -1,5 +1,4 @@
 """FastAPI entrypoint for the YouTube → MP3 converter."""
-from __future__ import annotations
 
 import asyncio
 import os
